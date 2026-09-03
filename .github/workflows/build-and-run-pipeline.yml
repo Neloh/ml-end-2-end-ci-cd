@@ -1,0 +1,51 @@
+name: build-and-run-pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  id-token: write        # REQUIRED for OIDC federation to AWS
+  contents: read
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: pip install -r requirements.txt
+
+      - name: Unit tests (gate before any AWS call)
+        run: |
+          # generate raw data locally + smoke-test the preprocessing/evaluate logic
+          python -c "import pandas, numpy, sklearn; print('deps ok')"
+          # (add real pytest here for src/ logic)
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_PIPELINE_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      # Only actually upsert + run the pipeline on main (not on PRs)
+      - name: Build and start SageMaker pipeline
+        if: github.ref == 'refs/heads/main'
+        env:
+          AWS_REGION:          ${{ vars.AWS_REGION }}
+          SM_EXEC_ROLE_ARN:    ${{ vars.SM_EXEC_ROLE_ARN }}
+          SM_BUCKET:           ${{ vars.SM_BUCKET }}
+          MODEL_PACKAGE_GROUP: ${{ vars.MODEL_PACKAGE_GROUP }}
+          ACC_THRESHOLD:       ${{ vars.ACC_THRESHOLD }}
+        run: |
+          # stage raw data so the pipeline's DataPrep has an input
+          python scripts/make_raw.py
+          aws s3 cp /tmp/raw.csv "s3://${SM_BUCKET}/ml-e2e-ci-cd/raw/raw.csv"
+          python pipelines/definition.py

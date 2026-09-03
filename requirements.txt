@@ -1,0 +1,5 @@
+sagemaker>=2.200,<3.0
+boto3>=1.34
+numpy
+pandas
+scikit-learn

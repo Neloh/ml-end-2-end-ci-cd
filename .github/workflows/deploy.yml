@@ -1,0 +1,39 @@
+name: deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      model_package_arn:
+        description: "Approved ModelPackage ARN to deploy"
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production      # GitHub environment protection = manual approver gate
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - run: pip install -r requirements.txt
+
+      - name: Configure AWS credentials via OIDC (deploy role)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Deploy endpoint from approved model package
+        env:
+          AWS_REGION:       ${{ vars.AWS_REGION }}
+          SM_EXEC_ROLE_ARN: ${{ vars.SM_EXEC_ROLE_ARN }}
+        run: |
+          python scripts/deploy_endpoint.py --model-package-arn "${{ inputs.model_package_arn }}"

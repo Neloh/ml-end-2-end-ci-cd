@@ -1,0 +1,16 @@
+# Never commit local creds / env / data / build junk
+.env
+*.env
+.aws/
+credentials
+*.pem
+*.key
+__pycache__/
+*.pyc
+/tmp/
+*.tar.gz
+model.pth
+raw.csv
+.DS_Store
+.venv/
+venv/
